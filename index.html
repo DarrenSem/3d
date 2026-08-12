@@ -30,14 +30,24 @@ https://www.youtube.com/watch?v=EZufiIwwqFA&ab_channel=TheWhyofPsi
 <body>
 
 <h3>
-<a href="https://DarrenSem.github.io/3d/" title="3D graphics projected onto 2D Canvas in vanilla JS - no libraries needed">https://DarrenSem.github.io/3d</a>
+<a href="https://DarrenSem.github.io/3d/" title="3D graphics projected onto 2D Canvas in vanilla JS - no libraries needed">
+https://DarrenSem.github.io/3d
+</a>
 </h3>
+<h5>
+<a href="https://github.com/DarrenSem/3d/blob/master/index.html" title="source (incl. models, and the Tsoding video that triggered this deep dive nerding-out on my cell phone today)">
+source
+</a> (incl. models, and the Tsoding video that triggered this deep dive nerding-out on my cell phone today)
+</h5>
+
 
 <canvas id="game"></canvas>
 
 <script was_src="index.js">
 
 "use strict";
+
+try {
 
 const FPS_SIZE = "24px";
 
@@ -47,48 +57,83 @@ const FPS_60 = 60;
 const FPS_120 = 60 * 2;
 const FPS_250 = 1000 / 4; // caps around 246
 const FPS_MAX = 1000 / 1;
-const FPS = FPS_MAX - FPS_MAX + FPS_250;
+const FPS = FPS_MAX - FPS_MAX + FPS_MAX;
 // const FPS = FPS_60 - FPS_60 + FPS_120;
 
+const useVertexNotFace = !"useVertexNotFace";
 
-const ROTATION_MULTIPLIER = 1 * 4 - 2;
+const useOffscreenCanvas = !"useOffscreenCanvas";
 
-const ANGLE_X = Math.PI * (0.5 * ((3-2)/3) ); // 0.5 = 90°
+const isCube = !"use_cube_not_penger";
 
-const ANGLE_Y = Math.PI * (0.5 * ((2-0)/3) ); // -0.5 = -90°
 
-const ANGLE_Z = Math.PI * (0.5 * ((2-2)/3) ); // 0.5 = 90°
+const SPIN_SPEED = (
+  isCube
+  ? 1 / ( 2 + 0 )
+  : 1 * ( 4 - 0 )
+);
 
 // a rotation is based on preserving distance from the origin, and the formulas for that naturally use cosine and sine.
 // cos = how much stays on the original axis
 // sin = how much moves to the other axis
 // tan = slope/ratio, not used directly for rotation
 
+// 0.5 = 90°
+const ANGLE_X = (
+  isCube
+  ? 45 / 90
+  : Math.PI * (0.5 * ((3-2)/3) )
+);
+
+const ANGLE_Y = (
+  isCube
+  ? -30 / 90
+  : Math.PI * (0.5 * ((2-0)/3) )
+);
+
+const ANGLE_Z = (
+  isCube
+  ? 15 / 90
+  : Math.PI * (0.5 * ((2-2)/3) )
+);
+
+
+
 const BACKGROUND = "#101010"
 
 const FOREGROUND = "#50FF50"
 
-const ctx = game.getContext("2d")
+const win = self;
+
+
+//// Original single canvas/context
+const gameOriginalContext = game.getContext("2d");
+const ctx = gameOriginalContext;
+
+
+//// Offscreen/back-buffer canvas
+//// TODO if (useOffscreenCanvas) { ... }
+//// TODO: const offscreenCanvas = game.transferControlToOffscreen();
+// const offscreenContext = offscreenCanvas.getContext("2d");
+// const ctx = offscreenContext;
+//// final step = call to updateVisibleCanvas()
+//const visibleCanvas = document.createElement("canvas");
+//const visibleContext = visibleCanvas.getContext("2d");
+
+
+/** Transfer the current frame to the visible canvas */
+function updateVisibleCanvas() {
+return "TODO:::";
+  // TODO: const bitmap = game.transferToImageBitmap();
+  // TODO: visibleCanvas.transferFromImageBitmap(bitmap);
+};
+
 
 function clear() {
     ctx.fillStyle = BACKGROUND
     ctx.fillRect(0, 0, game.width, game.height)
 }
 
-function point({x, y}) {
-    const s = 20;
-    ctx.fillStyle = FOREGROUND
-    ctx.fillRect(x - s/2, y - s/2, s, s)
-}
-
-function line(p1, p2) {
-    ctx.lineWidth = 3;
-    ctx.strokeStyle = FOREGROUND
-    ctx.beginPath();
-    ctx.moveTo(p1.x, p1.y);
-    ctx.lineTo(p2.x, p2.y);
-    ctx.stroke();
-}
 
 function screen(p) {
     // -1..1 => 0..2 => 0..1 => 0..w
@@ -144,7 +189,7 @@ function rotate_y({x, y, z}, angle) {
     };
     // NOTE: ^ valid XZ-plane rotation, BUT in a standard right-handed 3D coordinate system,
     // it is the negative of the usual positive rotation around the Y axis.
-    // Therefore maybe switch to this...
+    // Therefore (?) maybe switch to this... (?)
     return {
         x: x * c + z * s,
         y,
@@ -152,7 +197,7 @@ function rotate_y({x, y, z}, angle) {
     };
     
 }
-// ^ maybe should be -angle? Because 
+
 
 /** rotation in XY plane, around Z axis */
 function rotate_z({ x, y, z }, angle) {
@@ -170,11 +215,55 @@ function rotate_z({ x, y, z }, angle) {
 let dz = 1;
 let angle = 0;
 
+let resizing;
+let isLandscape;
+
 let now_ms_lower_precision = _ => +new Date; // Date.now();
 let now = _ => performance.now();
 let prevTime;
 
 let fpslog = new Set();
+
+
+function resize(w, h) {
+
+  isLandscape = w >= h;
+  
+  if (isLandscape) {
+    game.width = w;
+    game.height = w;
+  } else {
+    game.width = w;
+    game.height = w;
+  };
+};
+
+function handleWindowResize(evt) {
+
+  if (resizing) return;
+  
+  resizing = true;
+
+  const w = win.outerWidth - 20 // not innerWidth
+  const h = win.outerHeight - 20 // not innerHeight
+
+  resize(w, h);
+
+  setTimeout( () => {
+  
+    if (!isLandscape) {
+      win.scrollTo( {
+        top: document.body.scrollHeight,
+        behavior: "auto" // "smooth", or "auto" for instant scroll
+      } );
+    };
+    
+    resizing = false;
+    
+  }, 40);
+
+};
+
 
 function showFPS(fps) {
 
@@ -207,29 +296,54 @@ function showFPS(fps) {
   }
 
 
-  if (!!"use_fpslog_to_save_space") {
+  if (!!"use_fpslog_to_save_space_in_F12_dev_tools") {
     if (fps < FPS_250 * 1.25) {
       fpslog.add(fps.toFixed(4 - 4).padStart(3));
-      console.log( "FPS:", Array.from( fpslog.values() ).sort().reverse() );
+      // console.log( "FPS:", Array.from( fpslog.values() ).sort().reverse() );
     };
   } else {
     console.log( "FPS:", fps.toFixed(4 - 4) );
   };
 
-
-  // ctx.save();
-  ctx.fillStyle = "white";
+  const fps_x = 200 - (
+    isLandscape
+    ? 0
+    : 180
+  );
+  const fps_y = 260 - (
+    isLandscape
+    ? 0
+    : 200
+  );
+  
+  ctx.save(); // preserve styles and other attributes
+  ctx.fillStyle = "#099";
   ctx.font = FPS_SIZE + " monospace";
   ctx.textBaseline = "top";
-  ctx.fillText("FPS: " + fps.toFixed(4 - 4), 110, 210);
-  // ctx.restore();
-  
-  
+  ctx.fillText("FPS: " + fps.toFixed(4 - 4), fps_x, fps_y);
+  ctx.restore(); // cf. https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/save#description
 
 };
 
-function frame() {
 
+function line(p1, p2) {
+    ctx.lineWidth = 3 - 2.65;
+    ctx.strokeStyle = FOREGROUND
+    ctx.beginPath();
+    ctx.moveTo(p1.x, p1.y);
+    ctx.lineTo(p2.x, p2.y);
+    ctx.stroke();
+}
+
+
+function point({x, y}) {
+    const s = 20 - 18.17;
+    ctx.fillStyle = FOREGROUND
+    ctx.fillRect(x - s/2, y - s/2, s, s)
+}
+
+
+function frame() {
 
     let diffTime = now() - prevTime;
     //console.log({diffTime});
@@ -253,26 +367,31 @@ function frame() {
 
     dz = ( dz + ( dt * 0.5 ) ) % 2;
     
-    angle += ( Math.PI*dt ) * ROTATION_MULTIPLIER;
+    angle += ( Math.PI*dt ) * SPIN_SPEED;
     
     clear()
     
-    if (!"vertex_not_face") {
+    if (useVertexNotFace) {
     
       for (let vertex of vs) {
+      
         vertex = rotate_y(vertex, angle);
-        point(screen(project(
-          translate_z(vertex, dz)
-        )));
+
+        vertex = translate_z(vertex, dz + 0.85);
+
+        point(
+          screen(project(vertex))
+        );
+
       };
 
     } else {
 
       for (const face of fs) {
         let face_length = face.length;
-        
+
         for (let i = 0; i < face_length; ++i) {
-        
+
             let a = vs[face[ i ]];
             let b = vs[face[ (i+1) % face_length ]];
 
@@ -283,7 +402,7 @@ function frame() {
               a = rotate_x(a, ANGLE_X);
               b = rotate_x(b, ANGLE_X);
             };
-            
+
             if (!!"should_spin_y") {
               a = rotate_y(a, angle);
               b = rotate_y(b, angle);
@@ -291,7 +410,7 @@ function frame() {
               a = rotate_y(a, ANGLE_Y);
               b = rotate_y(b, ANGLE_Y);
             };
-            
+
             if (!"should_spin_z") {
               a = rotate_z(a, angle);
               b = rotate_z(b, angle);
@@ -299,13 +418,28 @@ function frame() {
               a = rotate_z(a, ANGLE_Z);
               b = rotate_z(b, ANGLE_Z);
             };
-            
-            
-            a = translate_x(a, -0.75);
-            b = translate_x(b, -0.75);
 
-            a = translate_z(a, dz + 0.5);
-            b = translate_z(b, dz + 0.5);
+
+            if (isCube) {
+
+              //a = translate_x(a, -0.15);
+              //b = translate_x(b, -0.15);
+            
+              a = translate_z(a, 0.85);
+              b = translate_z(b, 0.85);
+              //a = translate_z(a, dz + 0.85);
+              //b = translate_z(b, dz + 0.85);
+            
+            } else {
+            
+              a = translate_x(a, -0.55);
+              b = translate_x(b, -0.55);
+
+              a = translate_z(a, dz + 0.85);
+              b = translate_z(b, dz + 0.85);
+              
+            };
+
 
             line(
               screen(project(a)),
@@ -320,6 +454,8 @@ function frame() {
     
     showFPS(1000/diffTime);
     
+    updateVisibleCanvas()
+
     prevTime = now();
     
     setTimeout(frame, 1000/FPS);
@@ -330,25 +466,45 @@ function frame() {
 
 function main() {
 
-  console.log(game)
-  game.width = 800
-  game.height = 800
-  console.log(ctx)
+  // console.log( { vs_cube, fs_cube, vs_penger, fs_penger } );
+  // console.log( { vs, fs } );
+  
+  console.log(game);
+  console.log(ctx);
+  
+  handleWindowResize();
   
   prevTime = now();
   
   setTimeout(frame, 1000/FPS * 2);
   // frame(); // FPS: Infinity
+  
+  win.addEventListener("resize", handleWindowResize);
 
 };
 
 
-</script>
+let vs, fs;
+let vs_cube, fs_cube;
+let vs_penger, fs_penger;
 
-<script was_src="penger.js">
+setTimeout( _ => {
+  [vs, fs] = (
+    isCube
+    ? [vs_cube, fs_cube]
+    : [vs_penger, fs_penger]
+  );
+  main();
+}, 40 );
+
+
+// </s cript>
+
+
+// <s cript was_src="penger.js">
 
 // Model taken from https://github.com/Max-Kawula/penger-obj
-const vs = [
+vs_penger = [
     {x: -0.086914, y: 0.277547, z: 0.400041},
     {x: -0.069555, y: 0.329698, z: 0.376422},
     {x: -0.125429, y: 0.305056, z: 0.175577},
@@ -673,8 +829,9 @@ const vs = [
     {x: 0.512102, y: -0.455582, z: 0.309488},
     {x: 0.322171, y: -0.510414, z: 0.081591},
     {x: 0.322171, y: -0.244774, z: 0.081591},
-]
-const fs = [
+];
+
+fs_penger = [
     [22, 2, 10],
     [21, 1, 24],
     [7, 23, 14],
@@ -1299,15 +1456,14 @@ const fs = [
     [323, 308, 301],
     [323, 317, 299],
     [303, 317, 323],
-]
+];
 
-main();
+// </s cript>
 
-</script>
 
-<!-- <script was_src="cube.js">
+// <s cript was_src="cube.js">
 
-const vs = [
+vs_cube = [
     {x:  0.25, y:  0.25, z:  0.25},
     {x: -0.25, y:  0.25, z:  0.25},
     {x: -0.25, y: -0.25, z:  0.25},
@@ -1317,20 +1473,23 @@ const vs = [
     {x: -0.25, y:  0.25, z: -0.25},
     {x: -0.25, y: -0.25, z: -0.25},
     {x:  0.25, y: -0.25, z: -0.25},
-]
+];
 
-const fs = [
+fs_cube = [
     [0, 1, 2, 3],
     [4, 5, 6, 7],
     [0, 4],
     [1, 5],
     [2, 6],
     [3, 7],
-]
+];
 
-main();
 
-</script> -->
+} catch(err) { console.error(err); throw err; };
+
+
+</script>
+
 
 </body>
 
