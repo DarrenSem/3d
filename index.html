@@ -34,10 +34,21 @@ https://www.youtube.com/watch?v=EZufiIwwqFA&ab_channel=TheWhyofPsi
 https://DarrenSem.github.io/3d
 </a>
 </h3>
+<style>
+button {
+  border: none;
+  background: transparent;
+  // margin: 0px 0px;
+  padding: 0px 8px 0px 0px;
+}
+</style>
 <h5>
-<a href="https://github.com/DarrenSem/3d/blob/master/index.html" title="source (incl. models, and the Tsoding video that triggered this deep dive nerding-out on my cell phone today)">
+  <button id="btnCube">🧊</button>
+  <button id="btnPenger">🐧</button>
+  <button id="btnVertex">〰️</button>
+  <a href="https://github.com/DarrenSem/3d/blob/master/index.html" title="source (incl. models, and the Tsoding video that triggered this deep dive nerding-out on my cell phone today)">
 source
-</a> (incl. models, and the Tsoding video that triggered this deep dive nerding-out on my cell phone today)
+  </a> (incl. models, and the Tsoding video which triggered today's deep dive🤓 on my cell phone)
 </h5>
 
 
@@ -49,6 +60,59 @@ source
 
 try {
 
+const BACKGROUND = "#101010"
+
+const FOREGROUND = "#50FF50"
+
+const win = self;
+
+const config = (shouldUseCube) => { isCube = shouldUseCube; return [
+
+shouldUseCube
+
+, ( // SPIN_SPEED
+  isCube
+  ? 1 / ( 2 + 0 )
+  : 1 * ( 4 - 0 )
+)
+
+// a rotation is based on preserving distance from the origin, and the formulas for that naturally use cosine and sine.
+// cos = how much stays on the original axis
+// sin = how much moves to the other axis
+// tan = slope/ratio, not used directly for rotation
+
+// 0.5 = 90°
+, ( // ANGLE_X
+  isCube
+  ? 45 / 90
+  : Math.PI * (0.5 * ((3-2)/3) )
+)
+
+, ( // ANGLE_Y
+  isCube
+  ? -30 / 90
+  : Math.PI * (0.5 * ((2-0)/3) )
+)
+
+, ( // ANGLE_Z
+  isCube
+  ? 15 / 90
+  : Math.PI * (0.5 * ((2-2)/3) )
+)
+
+]; };
+
+
+
+let useOffscreenCanvas = !"useOffscreenCanvas";
+
+let useArrayOfLoggedFPS = !!"useArrayOfLoggedFPS"; // to see more values by saving space in F12 dev tools
+let clearArrayOfLoggedFPS;
+
+let useVertexNotFace = !"useVertexNotFace";
+
+let isCube = !"use_cube_not_penger";
+
 const FPS_SIZE = "24px";
 
 const FPS_24 = 24;
@@ -57,53 +121,14 @@ const FPS_60 = 60;
 const FPS_120 = 60 * 2;
 const FPS_250 = 1000 / 4; // caps around 246
 const FPS_MAX = 1000 / 1;
-const FPS = FPS_MAX - FPS_MAX + FPS_MAX;
-// const FPS = FPS_60 - FPS_60 + FPS_120;
-
-const useVertexNotFace = !"useVertexNotFace";
-
-const useOffscreenCanvas = !"useOffscreenCanvas";
-
-const isCube = !"use_cube_not_penger";
-
-
-const SPIN_SPEED = (
-  isCube
-  ? 1 / ( 2 + 0 )
-  : 1 * ( 4 - 0 )
-);
-
-// a rotation is based on preserving distance from the origin, and the formulas for that naturally use cosine and sine.
-// cos = how much stays on the original axis
-// sin = how much moves to the other axis
-// tan = slope/ratio, not used directly for rotation
-
-// 0.5 = 90°
-const ANGLE_X = (
-  isCube
-  ? 45 / 90
-  : Math.PI * (0.5 * ((3-2)/3) )
-);
-
-const ANGLE_Y = (
-  isCube
-  ? -30 / 90
-  : Math.PI * (0.5 * ((2-0)/3) )
-);
-
-const ANGLE_Z = (
-  isCube
-  ? 15 / 90
-  : Math.PI * (0.5 * ((2-2)/3) )
-);
+let FPS = FPS_MAX - FPS_MAX + FPS_MAX;
+// let FPS = FPS_60 - FPS_60 + FPS_120;
 
 
 
-const BACKGROUND = "#101010"
-
-const FOREGROUND = "#50FF50"
-
-const win = self;
+let [
+  , SPIN_SPEED, ANGLE_X, ANGLE_Y, ANGLE_Z
+] = config(isCube);
 
 
 //// Original single canvas/context
@@ -222,7 +247,9 @@ let now_ms_lower_precision = _ => +new Date; // Date.now();
 let now = _ => performance.now();
 let prevTime;
 
-let fpslog = new Set();
+let fpslog; // new Set() via fpslogclear()
+let fpsarrays; // new Set() via fpslogclear()
+
 
 
 function resize(w, h) {
@@ -265,7 +292,40 @@ function handleWindowResize(evt) {
 };
 
 
+function getfpslistArray() {
+  return fpslog?.size && Array.from( fpslog.values() ).sort().reverse();
+};
+
+function fpslogclear(logPreviousFirst, newFPSlist) {
+
+  if (fpsarrays && logPreviousFirst) {
+    newFPSlist ||= getfpslistArray();
+    if (newFPSlist) {
+      fpsarrays.add("" + newFPSlist);
+    };
+    console.log(newFPSlist);
+  };
+
+  // fpslog.clear();
+  // fpsarrays.clear();
+  fpslog = new Set();
+  fpsarrays = new Set();
+
+  clearArrayOfLoggedFPS = 999;
+
+  /*
+  if (logPreviousFirst) {
+    if (newFPSlist) {
+      fpsarrays.add("" + newFPSlist);
+      console.log(newFPSlist);
+    };
+  };
+  */
+  
+};
+
 function showFPS(fps) {
+
 
   let avg = (...nums) => (
     nums = nums.flat(Infinity),
@@ -295,14 +355,31 @@ function showFPS(fps) {
     fps = avg( fpsHistory.slice(-3) );
   }
 
-
-  if (!!"use_fpslog_to_save_space_in_F12_dev_tools") {
+  if (useArrayOfLoggedFPS) {
     if (fps < FPS_250 * 1.25) {
+
       fpslog.add(fps.toFixed(4 - 4).padStart(3));
-      // console.log( "FPS:", Array.from( fpslog.values() ).sort().reverse() );
+
+      let fpslist = getfpslistArray();
+
+      if (!fpsarrays.has("" + fpslist)) {
+        clearArrayOfLoggedFPS --;
+        
+        if (clearArrayOfLoggedFPS) {
+          fpsarrays.add("" + fpslist);
+          console.log(fpslist);
+        } else {
+          console.clear();
+          fpslogclear(!!"logPreviousFirst", fpslist)
+        };
+      
+      };
+
     };
   } else {
+  
     console.log( "FPS:", fps.toFixed(4 - 4) );
+
   };
 
   const fps_x = 200 - (
@@ -315,7 +392,6 @@ function showFPS(fps) {
     ? 0
     : 200
   );
-  
   ctx.save(); // preserve styles and other attributes
   ctx.fillStyle = "#099";
   ctx.font = FPS_SIZE + " monospace";
@@ -346,7 +422,7 @@ function point({x, y}) {
 function frame() {
 
     let diffTime = now() - prevTime;
-    //console.log({diffTime});
+    // console.warn( { diffTime } );
     // ^  @ FPS_60, diff (ms) might be any of: 16 17 18 19 20 21 23 24 25 (!)
     // ^ @ FPS_120, diff (ms) might be any of: 8 9 11 12 15 16 17 18 22 25 (!)
     
@@ -361,8 +437,8 @@ function frame() {
     // console.warn({dt});
     // if (dt != 0.016666666666666666) { console.warn(dt); };
     //// if (dt != 0.008333333333333333) { console.warn(dt); };
-    // console.log( "FPS:", 1000/diffTime );
-    // console.log( "FPS:", (1000/diffTime).toFixed(4 - 4) );
+    // console.warn( "FPS:", 1000/diffTime );
+    // console.warn( "FPS:", (1000/diffTime).toFixed(4 - 4) );
     // showFPS(1000/diffTime);
 
     dz = ( dz + ( dt * 0.5 ) ) % 2;
@@ -465,12 +541,6 @@ function frame() {
 
 
 function main() {
-
-  // console.log( { vs_cube, fs_cube, vs_penger, fs_penger } );
-  // console.log( { vs, fs } );
-  
-  console.log(game);
-  console.log(ctx);
   
   handleWindowResize();
   
@@ -488,14 +558,51 @@ let vs, fs;
 let vs_cube, fs_cube;
 let vs_penger, fs_penger;
 
-setTimeout( _ => {
+let launch = (evt) => {
+
+  console.clear();
+  
+  console.warn( ":launch() TOP", { isCube, SPIN_SPEED, ANGLE_X, ANGLE_Y, ANGLE_Z, fpslog, fpsarrays, clearArrayOfLoggedFPS } );
+
+  // console.warn( { vs_cube, fs_cube, vs_penger, fs_penger } );
+  // console.warn( { vs, fs } );
+  
+  console.warn(game);
+  console.warn(ctx);
+  
+  fpslogclear(!!"logPreviousFirst");
+  
+  if (+evt) {
+    [
+      isCube
+    , SPIN_SPEED, ANGLE_X, ANGLE_Y, ANGLE_Z
+    ] = config(evt == 1);
+  };
+
   [vs, fs] = (
     isCube
     ? [vs_cube, fs_cube]
     : [vs_penger, fs_penger]
   );
-  main();
-}, 40 );
+
+  if (!+evt) {
+    main();
+  };
+
+  console.warn( ":launch() BTM", { isCube, SPIN_SPEED, ANGLE_X, ANGLE_Y, ANGLE_Z, fpslog, fpsarrays, clearArrayOfLoggedFPS } );
+
+};
+
+setTimeout(launch, 40);
+
+
+btnCube.onclick = launch.bind(0, 1);
+btnPenger.onclick = launch.bind(0, 2);
+
+btnVertex.onclick = _ => {
+  useVertexNotFace = !useVertexNotFace;
+  launch(isCube ? 1 : 2);
+};
 
 
 // </s cript>
