@@ -1,56 +1,50 @@
-<html lang="en">
-
-<head>
-
-<meta charset="utf-8">
+<html lang="en"><head><meta charset="utf-8">
 
 <title>3D graphics projected onto 2D Canvas in vanilla JS - no libraries needed</title>
 
 <!-- <src
 
-based_on_github="
+Based_on_this_Tsoding_repo_on_github...="
 https://github.com/tsoding/formula
 "
 
-tsoding_video_="
+..._linked_from_his_YouTube_video_...="
 One Formula That Demystifies 3D Graphics (Tsoding 25Dec2025)
 https://www.youtube.com/watch?v=qjWkNZ0SXfo&ab_channel=Tsoding
 "
 
-matrix_rotations_video="
+..._where_he_recommended_this_matrix_rotations_video="
 Rotation matrix derivation (step-by-step prove) (The Why of Psi 29Apr2021)
 https://www.youtube.com/watch?v=EZufiIwwqFA&ab_channel=TheWhyofPsi
 "
 
 ></src> -->
 
-
-</head>
-
-<body>
-
-<h3>
-<a href="https://DarrenSem.github.io/3d/" title="3D graphics projected onto 2D Canvas in vanilla JS - no libraries needed">
-https://DarrenSem.github.io/3d
-</a>
-</h3>
 <style>
 button {
   border: none;
   background: transparent;
-  // margin: 0px 0px;
   padding: 0px 8px 0px 0px;
+  /* margin: 0px 0px; */
 }
 </style>
+
+</head><body>
+
+<h3>
+  <a href="https://DarrenSem.github.io/3d/" title="3D graphics projected onto 2D Canvas in vanilla JS - no libraries needed">
+    https://DarrenSem.github.io/3d
+  </a>
+</h3>
+
 <h5>
   <button id="btnCube">🧊</button>
   <button id="btnPenger">🐧</button>
-  <button id="btnVertex">〰️</button>
-  <a href="https://github.com/DarrenSem/3d/blob/master/index.html" title="source (incl. models, and the Tsoding video that triggered this deep dive nerding-out on my cell phone today)">
-source
-  </a> (incl. models, and the Tsoding video which triggered today's deep dive🤓 on my cell phone)
+  <button id="btnVertex">•••</button>
+  <a href="https://github.com/DarrenSem/3d/blob/master/index.html" title="source (incl. models, and the Tsoding video which triggered today's deep dive🤓 on my cell phone)">
+    source
+  </a> (incl. models, and the Tsoding video which triggered today's deep dive🤓 on my cell phone)
 </h5>
-
 
 <canvas id="game"></canvas>
 
@@ -58,30 +52,24 @@ source
 
 "use strict";
 
+
 try {
 
-const BACKGROUND = "#101010"
 
-const FOREGROUND = "#50FF50"
+const config = () => { return [
 
-const win = self;
-
-const config = (shouldUseCube) => { isCube = shouldUseCube; return [
-
-shouldUseCube
-
-, ( // SPIN_SPEED
+( // SPIN_SPEED
   isCube
-  ? 1 / ( 2 + 0 )
-  : 1 * ( 4 - 0 )
-)
+  ? 1 * ( 8 / 9 )
+  : 1 * ( 10 / 4 )
+) * (useVertexNotFace ? (7 / 9) : 1)
 
 // a rotation is based on preserving distance from the origin, and the formulas for that naturally use cosine and sine.
 // cos = how much stays on the original axis
 // sin = how much moves to the other axis
 // tan = slope/ratio, not used directly for rotation
 
-// 0.5 = 90°
+// 0.5 = 90° (?)
 , ( // ANGLE_X
   isCube
   ? 45 / 90
@@ -100,9 +88,32 @@ shouldUseCube
   : Math.PI * (0.5 * ((2-2)/3) )
 )
 
+, ( // FPS
+  FPS_MAX - FPS_MAX + FPS_MAX
+  // FPS_60 - FPS_60 + FPS_120
+)
+
+, ( // ESCAPE_VELOCITY: dz = ... ( dt * ESCAPE_VELOCITY )
+  isCube ? 0.75 : 0.5
+)
+
+, ( // MAX_DISTANCE: dz = ... % MAX_DISTANCE
+  isCube ? 4.5 : 3.5
+) + (useVertexNotFace ? 0 : 0)
+
+, ( // MIN_DISTANCE: a = translate_z(a, dz + MIN_DISTANCE)
+  isCube? 0.85 : 0.65
+) + (useVertexNotFace ? 0.0 : 0)
+
+, ( // POINT_SIZE
+  20 - ( isCube ? 16.5 : 19)
+)
+
 ]; };
 
+const BACKGROUND = "#101010"
 
+const FOREGROUND = "#50FF50"
 
 let useOffscreenCanvas = !"useOffscreenCanvas";
 
@@ -115,20 +126,39 @@ let isCube = !"use_cube_not_penger";
 
 const FPS_SIZE = "24px";
 
+
+
 const FPS_24 = 24;
 const FPS_30 = 60 / 2;
 const FPS_60 = 60;
 const FPS_120 = 60 * 2;
 const FPS_250 = 1000 / 4; // caps around 246
 const FPS_MAX = 1000 / 1;
-let FPS = FPS_MAX - FPS_MAX + FPS_MAX;
+// let FPS = FPS_MAX - FPS_MAX + FPS_MAX;
 // let FPS = FPS_60 - FPS_60 + FPS_120;
 
-
+const win = self;
 
 let [
-  , SPIN_SPEED, ANGLE_X, ANGLE_Y, ANGLE_Z
-] = config(isCube);
+  SPIN_SPEED, ANGLE_X, ANGLE_Y, ANGLE_Z, FPS
+  , ESCAPE_VELOCITY, MAX_DISTANCE, MIN_DISTANCE
+  , POINT_SIZE
+] = config();
+
+let vs, fs, models = {};
+
+let dz;
+let angle;
+
+let resizing;
+let isLandscape;
+
+let now_ms_lower_precision = _ => +new Date; // Date.now();
+let now = _ => performance.now();
+let prevTime;
+
+let fpslog; // new Set() via fpslogclear()
+let fpsarrays; // new Set() via fpslogclear()
 
 
 //// Original single canvas/context
@@ -136,9 +166,11 @@ const gameOriginalContext = game.getContext("2d");
 const ctx = gameOriginalContext;
 
 
+
 //// Offscreen/back-buffer canvas
-//// TODO if (useOffscreenCanvas) { ... }
+//// TODO: if (useOffscreenCanvas) { ... }
 //// TODO: const offscreenCanvas = game.transferControlToOffscreen();
+// or perhaps never will "DO". Tweaking the "paths" was a pretty fun exercise -- a good one to end on methinks. Gnite🤓(12Aug2026 @ 741pm)
 // const offscreenContext = offscreenCanvas.getContext("2d");
 // const ctx = offscreenContext;
 //// final step = call to updateVisibleCanvas()
@@ -152,6 +184,8 @@ return "TODO:::";
   // TODO: const bitmap = game.transferToImageBitmap();
   // TODO: visibleCanvas.transferFromImageBitmap(bitmap);
 };
+// or perhaps never will "DO". Tweaking the "paths" was a pretty fun exercise -- a good one to end on methinks. Gnite🤓(12Aug2026 @ 741pm)
+
 
 
 function clear() {
@@ -160,11 +194,15 @@ function clear() {
 }
 
 
-function screen(p) {
+function screen(v2) {
     // -1..1 => 0..2 => 0..1 => 0..w
+    // aka -1..0 are "left", 0..+1 are "right"
+    // and -1..0 are "top", 0..+1 are "bottom"
+    // (0, 0) is center of screen
+    
     return {
-        x: (p.x + 1)/2*game.width,
-        y: (1 - (p.y + 1)/2)*game.height,
+        x: ( ( v2.x + 1 ) / 2 ) * game.width,
+        y: (1 - (v2.y + 1) / 2 ) * game.height,
     }
 }
 
@@ -190,7 +228,7 @@ function translate_z({x, y, z}, dz) {
 
 
 /** rotation in YZ plane, around X axis */
-function rotate_x({ x, y, z }, angle) {
+function rotate_x({x, y, z}, angle) {
     const c = Math.cos(angle);
     const s = Math.sin(angle);
 
@@ -206,26 +244,17 @@ function rotate_x({ x, y, z }, angle) {
 function rotate_y({x, y, z}, angle) {
     const c = Math.cos(angle);
     const s = Math.sin(angle);
-    
-    if (!"should_use_Tsoding_y-rotation") return {
-        x: x * c - z * s,
-        y,
-        z: z * c + x * s,
-    };
-    // NOTE: ^ valid XZ-plane rotation, BUT in a standard right-handed 3D coordinate system,
-    // it is the negative of the usual positive rotation around the Y axis.
-    // Therefore (?) maybe switch to this... (?)
+
     return {
         x: x * c + z * s,
         y,
         z: z * c - x * s,
     };
-    
 }
 
 
 /** rotation in XY plane, around Z axis */
-function rotate_z({ x, y, z }, angle) {
+function rotate_z({x, y, z}, angle) {
     const c = Math.cos(angle);
     const s = Math.sin(angle);
 
@@ -235,21 +264,6 @@ function rotate_z({ x, y, z }, angle) {
         z,
     };
 }
-
-
-let dz = 1;
-let angle = 0;
-
-let resizing;
-let isLandscape;
-
-let now_ms_lower_precision = _ => +new Date; // Date.now();
-let now = _ => performance.now();
-let prevTime;
-
-let fpslog; // new Set() via fpslogclear()
-let fpsarrays; // new Set() via fpslogclear()
-
 
 
 function resize(w, h) {
@@ -263,6 +277,13 @@ function resize(w, h) {
     game.width = w;
     game.height = w;
   };
+  
+  ctx.lineWidth = 3 - 2.65;
+  ctx.strokeStyle = FOREGROUND;
+
+  ctx.font = FPS_SIZE + " monospace";
+  ctx.textBaseline = "top";
+
 };
 
 function handleWindowResize(evt) {
@@ -327,23 +348,26 @@ function fpslogclear(logPreviousFirst, newFPSlist) {
 function showFPS(fps) {
 
 
-  let avg = (...nums) => (
+  let avg_reduce = (...nums) => (
     nums = nums.flat(Infinity),
     nums.reduce( (acc, num) => acc + num, 0 )
     / ( nums.length || 1 )
   );
 
-  let fpsHistory = ( showFPS.H ||= [
-    fps
-    , fps
-    , fps
-    , fps
-  ] );
+  let avg = (...nums) => {
+    nums = nums.flat(Infinity);
+    let num, sum = 0;
+    for(num of nums) {
+      sum += num;
+    };
+    return sum / ( nums.length || 1 );
+  };
+
+  let fpsHistory = ( showFPS.H ||= [ fps, fps, fps, fps ] );
 
   fpsHistory.push(fps);
-  
+
   if(!"use_manual_avg") {
-  
     fps = (
       fpsHistory.at(-1)
       + fpsHistory.at(-2)
@@ -364,7 +388,7 @@ function showFPS(fps) {
 
       if (!fpsarrays.has("" + fpslist)) {
         clearArrayOfLoggedFPS --;
-        
+
         if (clearArrayOfLoggedFPS) {
           fpsarrays.add("" + fpslist);
           console.log(fpslist);
@@ -372,12 +396,12 @@ function showFPS(fps) {
           console.clear();
           fpslogclear(!!"logPreviousFirst", fpslist)
         };
-      
+
       };
 
     };
   } else {
-  
+
     console.log( "FPS:", fps.toFixed(4 - 4) );
 
   };
@@ -392,19 +416,93 @@ function showFPS(fps) {
     ? 0
     : 200
   );
-  ctx.save(); // preserve styles and other attributes
+  //// ctx.save(); // preserve current styles and other attributes, to .restore() later
+  // ctx.font = FPS_SIZE + " monospace";
+  // ctx.textBaseline = "top";
   ctx.fillStyle = "#099";
-  ctx.font = FPS_SIZE + " monospace";
-  ctx.textBaseline = "top";
   ctx.fillText("FPS: " + fps.toFixed(4 - 4), fps_x, fps_y);
-  ctx.restore(); // cf. https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/save#description
+  //// ctx.restore(); // cf. https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/save#description
 
 };
 
 
+/** restarts dz and spinning angle */
+function goHome() {
+  dz = MIN_DISTANCE;
+  angle = 0;
+};
+
+function getTransformed(a, b, angle, dz) {
+
+  let tx;
+  let ty;
+  let tz = dz + MIN_DISTANCE;
+
+  if (useVertexNotFace && !"keep_different") {
+    a = rotate_y(a, angle);
+    a = translate_z(a, dz + MIN_DISTANCE);
+    return [a];
+  };
+
+
+  if (!"should_spin_x") {
+    a = rotate_x(a, angle);
+    b = rotate_x(b, angle);
+  } else {
+    a = rotate_x(a, ANGLE_X);
+    b = rotate_x(b, ANGLE_X);
+  };
+
+  if (!!"should_spin_y") {
+    a = rotate_y(a, angle);
+    b = rotate_y(b, angle);
+  } else {
+    a = rotate_y(a, ANGLE_Y);
+    b = rotate_y(b, ANGLE_Y);
+  };
+
+  if (!"should_spin_z") {
+    a = rotate_z(a, angle);
+    b = rotate_z(b, angle);
+  } else {
+    a = rotate_z(a, ANGLE_Z);
+    b = rotate_z(b, ANGLE_Z);
+  };
+
+
+  if (isCube) {
+  
+    tx = ( -0.95) + (dz * 1.85) - ( 0.05 * Math.pow(dz, 4) );
+    a = translate_x(a, tx);
+    b = translate_x(b, tx);
+    
+    ty = -0.33 + ( 0.019 * Math.pow(dz, 3) );
+    a = translate_y(a, ty);
+    b = translate_y(b, ty);
+
+  } else {
+  
+    tx = 0.55 - ( 0.19 * Math.pow(dz, 3) ) + ( 0.000005373 * Math.pow( dz, 12 ) );
+    a = translate_x(a, tx);
+    b = translate_x(b, tx);
+    
+    ty = 0.55 - ( 0.18 * Math.pow(dz, 3) ) + ( 0.0000042 * Math.pow( dz, 12) );
+    a = translate_y(a, ty);
+    b = translate_y(b, ty);
+    
+  };
+
+
+  a = translate_z(a, tz);
+  b = translate_z(b, tz);
+
+  return [a, b];
+};
+
+
 function line(p1, p2) {
-    ctx.lineWidth = 3 - 2.65;
-    ctx.strokeStyle = FOREGROUND
+    // ctx.lineWidth = 3 - 2.65;
+    // ctx.strokeStyle = FOREGROUND;
     ctx.beginPath();
     ctx.moveTo(p1.x, p1.y);
     ctx.lineTo(p2.x, p2.y);
@@ -413,13 +511,14 @@ function line(p1, p2) {
 
 
 function point({x, y}) {
-    const s = 20 - 18.17;
-    ctx.fillStyle = FOREGROUND
-    ctx.fillRect(x - s/2, y - s/2, s, s)
-}
+    ctx.fillStyle = FOREGROUND;
+    ctx.fillRect(x - POINT_SIZE/2, y - POINT_SIZE/2, POINT_SIZE, POINT_SIZE);
+};
 
 
 function frame() {
+
+    let a, b, face, face_length;
 
     let diffTime = now() - prevTime;
     // console.warn( { diffTime } );
@@ -441,81 +540,35 @@ function frame() {
     // console.warn( "FPS:", (1000/diffTime).toFixed(4 - 4) );
     // showFPS(1000/diffTime);
 
-    dz = ( dz + ( dt * 0.5 ) ) % 2;
+    dz = ( dz + ( dt * ESCAPE_VELOCITY ) ) % MAX_DISTANCE;
     
     angle += ( Math.PI*dt ) * SPIN_SPEED;
-    
-    clear()
-    
-    if (useVertexNotFace) {
-    
-      for (let vertex of vs) {
-      
-        vertex = rotate_y(vertex, angle);
 
-        vertex = translate_z(vertex, dz + 0.85);
+    clear();
+
+    if (useVertexNotFace) {
+
+      for (a of vs) {
+
+        [a] = getTransformed(a, translate_x(a, 0), angle, dz);
 
         point(
-          screen(project(vertex))
+          screen(project(a))
         );
 
       };
 
     } else {
 
-      for (const face of fs) {
-        let face_length = face.length;
+      for (face of fs) {
+        face_length = face.length;
 
         for (let i = 0; i < face_length; ++i) {
 
-            let a = vs[face[ i ]];
-            let b = vs[face[ (i+1) % face_length ]];
+            a = vs[face[ i ]];
+            b = vs[face[ (i+1) % face_length ]];
 
-            if (!"should_spin_x") {
-              a = rotate_x(a, angle);
-              b = rotate_x(b, angle);
-            } else {
-              a = rotate_x(a, ANGLE_X);
-              b = rotate_x(b, ANGLE_X);
-            };
-
-            if (!!"should_spin_y") {
-              a = rotate_y(a, angle);
-              b = rotate_y(b, angle);
-            } else {
-              a = rotate_y(a, ANGLE_Y);
-              b = rotate_y(b, ANGLE_Y);
-            };
-
-            if (!"should_spin_z") {
-              a = rotate_z(a, angle);
-              b = rotate_z(b, angle);
-            } else {
-              a = rotate_z(a, ANGLE_Z);
-              b = rotate_z(b, ANGLE_Z);
-            };
-
-
-            if (isCube) {
-
-              //a = translate_x(a, -0.15);
-              //b = translate_x(b, -0.15);
-            
-              a = translate_z(a, 0.85);
-              b = translate_z(b, 0.85);
-              //a = translate_z(a, dz + 0.85);
-              //b = translate_z(b, dz + 0.85);
-            
-            } else {
-            
-              a = translate_x(a, -0.55);
-              b = translate_x(b, -0.55);
-
-              a = translate_z(a, dz + 0.85);
-              b = translate_z(b, dz + 0.85);
-              
-            };
-
+            [a, b] = getTransformed(a, b, angle, dz);
 
             line(
               screen(project(a)),
@@ -524,94 +577,109 @@ function frame() {
 
         }; // end for (let i = 0; i < face_length; ++i) {
 
-      }; // end for (const f of fs) {
+      }; // end for (face of fs) {
 
-    }; // end if (!"vertex_not_face") {
-    
+    }; // end if (useVertexNotFace) {
+
     showFPS(1000/diffTime);
-    
+
     updateVisibleCanvas()
 
     prevTime = now();
-    
+
     setTimeout(frame, 1000/FPS);
     // setTimeout(frame, 1);
 
 } // end function frame()
 
 
-function main() {
-  
-  handleWindowResize();
-  
-  prevTime = now();
-  
-  setTimeout(frame, 1000/FPS * 2);
-  // frame(); // FPS: Infinity
-  
-  win.addEventListener("resize", handleWindowResize);
+let launch = (evt, button) => {
 
-};
-
-
-let vs, fs;
-let vs_cube, fs_cube;
-let vs_penger, fs_penger;
-
-let launch = (evt) => {
+  let isCubeOld, toggling, model;
 
   console.clear();
-  
-  console.warn( ":launch() TOP", { isCube, SPIN_SPEED, ANGLE_X, ANGLE_Y, ANGLE_Z, fpslog, fpsarrays, clearArrayOfLoggedFPS } );
 
-  // console.warn( { vs_cube, fs_cube, vs_penger, fs_penger } );
-  // console.warn( { vs, fs } );
+  console.warn( "\n\n" + ":launch() TOP", {
+    isCube, useVertexNotFace, fpslog, fpsarrays, clearArrayOfLoggedFPS,
+    SPIN_SPEED, ANGLE_X, ANGLE_Y, ANGLE_Z, FPS
+    , ESCAPE_VELOCITY, MAX_DISTANCE, MIN_DISTANCE
+    , POINT_SIZE
+  } );
   
+  // console.warn( { models } );
+  // console.warn( { vs, fs } );
+
   console.warn(game);
   console.warn(ctx);
-  
+
   fpslogclear(!!"logPreviousFirst");
   
-  if (+evt) {
-    [
-      isCube
-    , SPIN_SPEED, ANGLE_X, ANGLE_Y, ANGLE_Z
-    ] = config(evt == 1);
+  if (button == 3) {
+    useVertexNotFace = !useVertexNotFace;
+  } else if (button) {
+    isCubeOld = isCube;
+    isCube = (button == 1);
+    toggling = (isCubeOld !== isCube);
+  };
+  
+  [
+    SPIN_SPEED, ANGLE_X, ANGLE_Y, ANGLE_Z, FPS
+    , ESCAPE_VELOCITY, MAX_DISTANCE, MIN_DISTANCE
+    , POINT_SIZE
+  ] = config();
+
+  if (toggling || !evt) {
+    model = isCube ? models.cube : models.penger;
+    vs = model.vs;
+    fs = model.fs;
+  };
+  
+  if (button != 3) {
+    goHome();
   };
 
-  [vs, fs] = (
-    isCube
-    ? [vs_cube, fs_cube]
-    : [vs_penger, fs_penger]
-  );
-
-  if (!+evt) {
-    main();
-  };
-
-  console.warn( ":launch() BTM", { isCube, SPIN_SPEED, ANGLE_X, ANGLE_Y, ANGLE_Z, fpslog, fpsarrays, clearArrayOfLoggedFPS } );
+  console.warn( ":launch() BTM", {
+    isCube, useVertexNotFace, fpslog, fpsarrays, clearArrayOfLoggedFPS,
+    SPIN_SPEED, ANGLE_X, ANGLE_Y, ANGLE_Z, FPS
+    , ESCAPE_VELOCITY, MAX_DISTANCE, MIN_DISTANCE
+    , POINT_SIZE
+  } );
 
 };
 
-setTimeout(launch, 40);
+let buttonLaunch = (button) => launch.bind(null, {}, button);
 
+let main = () => {
 
-btnCube.onclick = launch.bind(0, 1);
-btnPenger.onclick = launch.bind(0, 2);
+  prevTime = now();
 
-btnVertex.onclick = _ => {
-  useVertexNotFace = !useVertexNotFace;
-  launch(isCube ? 1 : 2);
+  handleWindowResize();
+
+  setTimeout(frame, 1000/FPS * 2);
+  // frame(); // FPS: Infinity
+
+  win.addEventListener("resize", handleWindowResize);
+
+  btnCube.onclick = buttonLaunch(1);
+
+  btnPenger.onclick = buttonLaunch(2);
+
+  btnVertex.onclick = buttonLaunch(3);
+
+  launch();
 };
 
 
-// </s cript>
+// </ s cript>
 
 
-// <s cript was_src="penger.js">
+// < s cript was_src="penger.js">
 
 // Model taken from https://github.com/Max-Kawula/penger-obj
-vs_penger = [
+
+models.penger = {
+
+vs: [
     {x: -0.086914, y: 0.277547, z: 0.400041},
     {x: -0.069555, y: 0.329698, z: 0.376422},
     {x: -0.125429, y: 0.305056, z: 0.175577},
@@ -936,9 +1004,9 @@ vs_penger = [
     {x: 0.512102, y: -0.455582, z: 0.309488},
     {x: 0.322171, y: -0.510414, z: 0.081591},
     {x: 0.322171, y: -0.244774, z: 0.081591},
-];
+],
 
-fs_penger = [
+fs: [
     [22, 2, 10],
     [21, 1, 24],
     [7, 23, 14],
@@ -1563,14 +1631,18 @@ fs_penger = [
     [323, 308, 301],
     [323, 317, 299],
     [303, 317, 323],
-];
+],
 
-// </s cript>
+}; // end models.penger = {
+
+// </ s cript>
 
 
-// <s cript was_src="cube.js">
+// < s cript was_src="cube.js">
 
-vs_cube = [
+models.cube = {
+
+vs: [
     {x:  0.25, y:  0.25, z:  0.25},
     {x: -0.25, y:  0.25, z:  0.25},
     {x: -0.25, y: -0.25, z:  0.25},
@@ -1580,24 +1652,41 @@ vs_cube = [
     {x: -0.25, y:  0.25, z: -0.25},
     {x: -0.25, y: -0.25, z: -0.25},
     {x:  0.25, y: -0.25, z: -0.25},
-];
+],
 
-fs_cube = [
+fs: [
     [0, 1, 2, 3],
     [4, 5, 6, 7],
     [0, 4],
     [1, 5],
     [2, 6],
     [3, 7],
-];
+],
+
+}; // end models.cube = {
 
 
-} catch(err) { console.error(err); throw err; };
+main();
+
+
+} catch(err) {
+  if ( // QuickEdit+ Eruda.js try-catch LINE # IS +9 TOO HIGH! -- Workaround via error.stack.replace(regex)
+    1 == [console.dir, console.dirxml]
+    .findIndex( fn =>/\[native code] }$/.test(fn) )
+  ) {
+    err.stack = err.stack
+    .replace( /(\w+:)(\d+)(:\d+\b)/g
+    , (_, f, l, c) => f + (+l - 9) + c );
+    console.error(err);
+    alert(err.stack);
+    throw err;
+  } else {
+    console.error(err);
+    alert(err.stack);
+  };
+};
 
 
 </script>
 
-
-</body>
-
-</html>
+</body></html>
